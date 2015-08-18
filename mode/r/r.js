@@ -1,3 +1,19 @@
+// THIS HAS BEEN MODIFIED BY NUMBERS INTERNATIONAL FROM THE ORIGINAL SOURCE.
+//
+// Source: https://github.com/codemirror/CodeMirror/blob/master/mode/r/r.js
+// Date: May 20, 2014
+//
+// Changes:
+// - Recognition of file paths (e.g. C:\file.txt)
+// - Handle backticks (`)
+// - Treat qset$question$variable references
+//    as a single token (rather than separate tokens for the words and $ operator).
+//
+// Apart from backticks, the changes are due to proprietary changes to R syntax
+// in Q, and we do not think it makes sense to submit a Pull Request for them.
+//
+// Extra changes: fix issues with indentation
+
 // CodeMirror, copyright (c) by Marijn Haverbeke and others
 // Distributed under an MIT license: http://codemirror.net/LICENSE
 
@@ -43,21 +59,9 @@ CodeMirror.defineMode("r", function(config) {
       state.tokenize = tokenString(ch);
       return "string";
     } else if (ch == "." && stream.match(/.[.\d]+/)) {
-      return "keyword";
-    } else if (/[\w\.]/.test(ch) && ch != "_") {
-      stream.eatWhile(/[\w\.]/);
-      var word = stream.current();
-      if (atoms.propertyIsEnumerable(word)) return "atom";
-      if (keywords.propertyIsEnumerable(word)) {
-        // Block keywords start new blocks, except 'else if', which only starts
-        // one new block for the 'if', no block for the 'else'.
-        if (blockkeywords.propertyIsEnumerable(word) &&
-            !stream.match(/\s*if(\s+|$)/, false))
-          curPunc = "block";
         return "keyword";
-      }
-      if (builtins.propertyIsEnumerable(word)) return "builtin";
-      return "variable";
+    } else if (/[\w\.`]/.test(ch) && ch != "_") {
+        return readVariable(ch)(stream);
     } else if (ch == "%") {
       if (stream.skipTo("%")) stream.next();
       return "variable-2";
@@ -78,8 +82,60 @@ CodeMirror.defineMode("r", function(config) {
     }
   }
 
+
+  function readVariable(quote) {
+      var bktk = function (stream) {
+          var next;
+          while ((next = stream.next()) != null) {
+              if (next == "\\") {
+                  stream.skipTo("\\");
+                  next = stream.next();
+                  if (next == quote || next == "\\")
+                      stream.skipTo(next);
+              } else if (next == quote) {
+                  break;
+              }
+          }
+      };
+      var simple = function (stream) {
+          stream.eatWhile(/[\w\.]/);
+      };
+      return function (stream) {
+          do {
+              if (quote == "`")
+                  bktk(stream);
+              else
+                  simple(stream);
+              if (!stream.eat("$"))
+                  break;
+              quote = stream.next();
+          } while (quote != null && /[\w\.`]/.test(quote));
+          var result = "variable";
+          var word = stream.current();
+          if (atoms.propertyIsEnumerable(word))
+              result = "atom";
+          else if (keywords.propertyIsEnumerable(word)) {
+              // Block keywords start new blocks, except 'else if', which only starts
+              // one new block for the 'if', no block for the 'else'.
+              if (blockkeywords.propertyIsEnumerable(word) &&
+                  !stream.match(/\s*if(\s+|$)/, false))
+                  if (word == "else" || word == "repeat")
+                      curPunc = "block_no_args";
+                  else
+                      curPunc = "block";
+              result = "keyword";
+          } else if (builtins.propertyIsEnumerable(word))
+              result = "builtin";
+          return result;
+      };
+  }
+
   function tokenString(quote) {
     return function(stream, state) {
+        if (quote == '"' && stream.match(/^[A-Z]:[\\\\/][^"]+/) || quote == "'" && stream.match(/^[A-Z]:[\\\\/][^']+/)) {
+            return "path";
+        }
+
       if (stream.eat("\\")) {
         var ch = stream.next();
         if (ch == "x") stream.match(/^[a-f0-9]{2}/i);
@@ -104,7 +160,8 @@ CodeMirror.defineMode("r", function(config) {
                  indent: state.indent,
                  align: null,
                  column: stream.column(),
-                 prev: state.ctx};
+                 prev: state.ctx,
+                 args: false};
   }
   function pop(state) {
     state.indent = state.ctx.indent;
@@ -131,7 +188,9 @@ CodeMirror.defineMode("r", function(config) {
       if (style != "comment" && state.ctx.align == null) state.ctx.align = true;
 
       var ctype = state.ctx.type;
-      if ((curPunc == ";" || curPunc == "{" || curPunc == "}") && ctype == "block") pop(state);
+      if (curPunc != "block" && curPunc != "block_no_args" && ctype == "block" && state.ctx.args)
+          while (state.ctx && state.ctx.type == "block")
+              pop(state);
       if (curPunc == "{") push(state, "}", stream);
       else if (curPunc == "(") {
         push(state, ")", stream);
@@ -139,7 +198,14 @@ CodeMirror.defineMode("r", function(config) {
       }
       else if (curPunc == "[") push(state, "]", stream);
       else if (curPunc == "block") push(state, "block", stream);
-      else if (curPunc == ctype) pop(state);
+      else if (curPunc == "block_no_args") {
+          push(state, "block", stream);
+          state.ctx.args = true;
+      } else if (curPunc == ctype) {
+          pop(state);
+          if (curPunc == ")" && state.ctx && state.ctx.type == "block")
+              state.ctx.args = true;
+      }
       state.afterIdent = style == "variable" || style == "keyword";
       return style;
     },
