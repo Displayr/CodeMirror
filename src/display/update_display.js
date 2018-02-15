@@ -256,5 +256,5 @@ export function updateGutterSpace(cm) {
 export function setDocumentHeight(cm, measure) {
   cm.display.sizer.style.minHeight = measure.docHeight + "px"
   cm.display.heightForcer.style.top = measure.docHeight + "px"
-  cm.display.gutters.style.height = (measure.docHeight + cm.display.barHeight + scrollGap(cm)) + "px"
+  cm.display.gutters.style.height = (cm.display.scroller.scrollHeight - scrollGap(cm) - cm.display.barHeight) + "px"
 }
