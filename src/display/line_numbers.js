@@ -9,7 +9,7 @@ import { updateGutterSpace } from "./update_display.js"
 export function alignHorizontally(cm) {
   let display = cm.display, view = display.view
   if (!display.alignWidgets && (!display.gutters.firstChild || !cm.options.fixedGutter)) return
-  let comp = compensateForHScroll(display) - display.scroller.scrollLeft + cm.doc.scrollLeft
+  let comp = compensateForHScroll(display, cm.options.transformScale) - display.scroller.scrollLeft + cm.doc.scrollLeft
   let gutterW = display.gutters.offsetWidth, left = comp + "px"
   for (let i = 0; i < view.length; i++) if (!view[i].hidden) {
     if (cm.options.fixedGutter) {

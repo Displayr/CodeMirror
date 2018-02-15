@@ -10,6 +10,7 @@ import { activeElt, removeChildrenAndAdd, selectInput } from "../util/dom.js"
 import { e_preventDefault, e_stop, off, on, signalDOMEvent } from "../util/event.js"
 import { hasSelection } from "../util/feature_detection.js"
 import { Delayed, sel_dontScroll } from "../util/misc.js"
+import {getUnscaledBoundingClientRect} from "../measurement/position_measurement";
 
 // TEXTAREA INPUT STYLE
 
@@ -113,7 +114,7 @@ export default class TextareaInput {
     // Move the hidden textarea near the cursor to prevent scrolling artifacts
     if (cm.options.moveInputWithCursor) {
       let headPos = cursorCoords(cm, doc.sel.primary().head, "div")
-      let wrapOff = display.wrapper.getBoundingClientRect(), lineOff = display.lineDiv.getBoundingClientRect()
+      let wrapOff = getUnscaledBoundingClientRect(display.wrapper, cm.options.transformScale), lineOff = getUnscaledBoundingClientRect(display.lineDiv, cm.options.transformScale)
       result.teTop = Math.max(0, Math.min(display.wrapper.clientHeight - 10,
                                           headPos.top + lineOff.top - wrapOff.top))
       result.teLeft = Math.max(0, Math.min(display.wrapper.clientWidth - 10,

@@ -217,7 +217,7 @@ export default function(CodeMirror) {
     },
 
     defaultTextHeight: function() { return textHeight(this.display) },
-    defaultCharWidth: function() { return charWidth(this.display) },
+    defaultCharWidth: function() { return charWidth(this.display, this.options.transformScale) },
 
     getViewport: function() { return {from: this.display.viewFrom, to: this.display.viewTo}},
 

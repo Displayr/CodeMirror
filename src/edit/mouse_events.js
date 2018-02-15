@@ -3,7 +3,7 @@ import { operation } from "../display/operations.js"
 import { visibleLines } from "../display/update_lines.js"
 import { clipPos, cmp, maxPos, minPos, Pos } from "../line/pos.js"
 import { getLine, lineAtHeight } from "../line/utils_line.js"
-import { posFromMouse } from "../measurement/position_measurement.js"
+import { getUnscaledBoundingClientRect, posFromMouse } from "../measurement/position_measurement.js"
 import { eventInWidget } from "../measurement/widgets.js"
 import { normalizeSelection, Range, Selection } from "../model/selection.js"
 import { extendRange, extendSelection, replaceOneSelection, setSelection } from "../model/selection_updates.js"
@@ -275,7 +275,7 @@ function leftButtonSelect(cm, event, start, behavior) {
     }
   }
 
-  let editorSize = display.wrapper.getBoundingClientRect()
+  let editorSize = getUnscaledBoundingClientRect(display.wrapper, cm.options.transformScale)
   // Used to ensure timeout re-tries don't fire when another extend
   // happened in the meantime (clearTimeout isn't reliable -- at
   // least on Chrome, the timeouts still happen even when cleared,
@@ -366,18 +366,18 @@ function gutterEvent(cm, e, type, prevent) {
     try { mX = e.clientX; mY = e.clientY }
     catch(e) { return false }
   }
-  if (mX >= Math.floor(cm.display.gutters.getBoundingClientRect().right)) return false
+  if (mX >= Math.floor(getUnscaledBoundingClientRect(cm.display.gutters, cm.options.transformScale).right)) return false
   if (prevent) e_preventDefault(e)
 
   let display = cm.display
-  let lineBox = display.lineDiv.getBoundingClientRect()
+  let lineBox = getUnscaledBoundingClientRect(display.lineDiv, cm.options.transformScale)
 
   if (mY > lineBox.bottom || !hasHandler(cm, type)) return e_defaultPrevented(e)
   mY -= lineBox.top - display.viewOffset
 
   for (let i = 0; i < cm.options.gutters.length; ++i) {
     let g = display.gutters.childNodes[i]
-    if (g && g.getBoundingClientRect().right >= mX) {
+    if (g && getUnscaledBoundingClientRect(g, cm.options.transformScale).right >= mX) {
       let line = lineAtHeight(cm.doc, mY)
       let gutter = cm.options.gutters[i]
       signal(cm, type, cm, line, gutter, e)

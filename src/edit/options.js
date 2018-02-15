@@ -101,7 +101,7 @@ export function defineOptions(CodeMirror) {
     guttersChanged(cm)
   }, true)
   option("fixedGutter", true, (cm, val) => {
-    cm.display.gutters.style.left = val ? compensateForHScroll(cm.display) + "px" : "0"
+    cm.display.gutters.style.left = val ? compensateForHScroll(cm.display, cm.options.transformScale) + "px" : "0"
     cm.refresh()
   }, true)
   option("coverGutterNextToScrollbar", false, cm => updateScrollbars(cm), true)
@@ -154,6 +154,11 @@ export function defineOptions(CodeMirror) {
   option("tabindex", null, (cm, val) => cm.display.input.getField().tabIndex = val || "")
   option("autofocus", null)
   option("direction", "ltr", (cm, val) => cm.doc.setDirection(val), true)
+  option("transformScale", 1, function (cm, val) {
+    if (!val)
+  	  throw new Error('Unrecoginized scale: ' + val);
+    cm.refresh();
+  });
 }
 
 function guttersChanged(cm) {

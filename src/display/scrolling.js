@@ -1,5 +1,15 @@
 import { Pos } from "../line/pos.js"
-import { cursorCoords, displayHeight, displayWidth, estimateCoords, paddingTop, paddingVert, scrollGap, textHeight } from "../measurement/position_measurement.js"
+import {
+  cursorCoords,
+  displayHeight,
+  displayWidth,
+  estimateCoords,
+  getUnscaledBoundingClientRect,
+  paddingTop,
+  paddingVert,
+  scrollGap,
+  textHeight
+} from "../measurement/position_measurement.js"
 import { gecko, phantom } from "../util/browser.js"
 import { elt } from "../util/dom.js"
 import { signalDOMEvent } from "../util/event.js"
@@ -15,7 +25,7 @@ import { updateDisplaySimple } from "./update_display.js"
 export function maybeScrollWindow(cm, rect) {
   if (signalDOMEvent(cm, "scrollCursorIntoView")) return
 
-  let display = cm.display, box = display.sizer.getBoundingClientRect(), doScroll = null
+  let display = cm.display, box = getUnscaledBoundingClientRect(display.sizer, cm.options.transformScale), doScroll = null
   if (rect.top + box.top < 0) doScroll = true
   else if (rect.bottom + box.top > (window.innerHeight || document.documentElement.clientHeight)) doScroll = false
   if (doScroll != null && !phantom) {

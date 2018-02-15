@@ -1,6 +1,6 @@
 import { heightAtLine } from "../line/spans.js"
 import { getLine, lineAtHeight, updateLineHeight } from "../line/utils_line.js"
-import { paddingTop, textHeight } from "../measurement/position_measurement.js"
+import { getUnscaledBoundingClientRect, paddingTop, textHeight } from "../measurement/position_measurement.js"
 import { ie, ie_version } from "../util/browser.js"
 
 // Read the actual heights of the rendered lines, and update their
@@ -16,7 +16,7 @@ export function updateHeightsInViewport(cm) {
       height = bot - prevBottom
       prevBottom = bot
     } else {
-      let box = cur.node.getBoundingClientRect()
+      let box = getUnscaledBoundingClientRect(cur.node, cm.options.transformScale)
       height = box.bottom - box.top
     }
     let diff = cur.line.height - height

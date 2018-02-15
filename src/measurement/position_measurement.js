@@ -44,7 +44,7 @@ function ensureLineHeights(cm, lineView, rect) {
     let heights = lineView.measure.heights = []
     if (wrapping) {
       lineView.measure.width = curWidth
-      let rects = lineView.text.firstChild.getClientRects()
+      let rects = getUnscaledClientRects(lineView.text.firstChild, cm.options.transformScale)
       for (let i = 0; i < rects.length - 1; i++) {
         let cur = rects[i], next = rects[i + 1]
         if (Math.abs(cur.bottom - next.bottom) > 2)
@@ -131,7 +131,7 @@ export function measureCharPrepared(cm, prepared, ch, bias, varHeight) {
     found = prepared.cache[key]
   } else {
     if (!prepared.rect)
-      prepared.rect = prepared.view.text.getBoundingClientRect()
+      prepared.rect = getUnscaledBoundingClientRect(prepared.view.text, cm.options.transformScale)
     if (!prepared.hasHeights) {
       ensureLineHeights(cm, prepared.view, prepared.rect)
       prepared.hasHeights = true
@@ -224,10 +224,11 @@ function measureCharInner(cm, prepared, ch, bias) {
   if (ie && ie_version < 9 && !start && (!rect || !rect.left && !rect.right)) {
     let rSpan = node.parentNode.getClientRects()[0]
     if (rSpan)
-      rect = {left: rSpan.left, right: rSpan.left + charWidth(cm.display), top: rSpan.top, bottom: rSpan.bottom}
+      rect = {left: rSpan.left, right: rSpan.left + charWidth(cm.display, cm.options.transformScale), top: rSpan.top, bottom: rSpan.bottom}
     else
       rect = nullRect
   }
+  rect = unscale(rect, cm.options.transformScale)
 
   let rtop = rect.top - prepared.rect.top, rbot = rect.bottom - prepared.rect.top
   let mid = (rtop + rbot) / 2
@@ -314,7 +315,7 @@ export function intoCoordSystem(cm, lineObj, rect, context, includeWidgets) {
   if (context == "local") yOff += paddingTop(cm.display)
   else yOff -= cm.display.viewOffset
   if (context == "page" || context == "window") {
-    let lOff = cm.display.lineSpace.getBoundingClientRect()
+    let lOff = getUnscaledBoundingClientRect(cm.display.lineSpace, cm.options.transformScale);
     yOff += lOff.top + (context == "window" ? 0 : pageScrollY())
     let xOff = lOff.left + (context == "window" ? 0 : pageScrollX())
     rect.left += xOff; rect.right += xOff
@@ -333,12 +334,12 @@ export function fromCoordSystem(cm, coords, context) {
     left -= pageScrollX()
     top -= pageScrollY()
   } else if (context == "local" || !context) {
-    let localBox = cm.display.sizer.getBoundingClientRect()
+    let localBox = getUnscaledBoundingClientRect(cm.display.sizer, cm.options.transformScale);
     left += localBox.left
     top += localBox.top
   }
 
-  let lineSpaceBox = cm.display.lineSpace.getBoundingClientRect()
+  let lineSpaceBox = getUnscaledBoundingClientRect(cm.display.lineSpace, cm.options.transformScale);
   return {left: left - lineSpaceBox.left, top: top - lineSpaceBox.top}
 }
 
@@ -397,7 +398,7 @@ export function cursorCoords(cm, pos, context, lineObj, preparedMeasure, varHeig
 export function estimateCoords(cm, pos) {
   let left = 0
   pos = clipPos(cm.doc, pos)
-  if (!cm.options.lineWrapping) left = charWidth(cm.display) * pos.ch
+  if (!cm.options.lineWrapping) left = charWidth(cm.display, cm.options.transformScale) * pos.ch
   let lineObj = getLine(cm.doc, pos.line)
   let top = heightAtLine(lineObj) + paddingTop(cm.display)
   return {left: left, right: left, top: top, bottom: top + lineObj.height}
@@ -603,12 +604,12 @@ export function textHeight(display) {
 }
 
 // Compute the default character width.
-export function charWidth(display) {
+export function charWidth(display, scale) {
   if (display.cachedCharWidth != null) return display.cachedCharWidth
   let anchor = elt("span", "xxxxxxxxxx")
   let pre = elt("pre", [anchor])
   removeChildrenAndAdd(display.measure, pre)
-  let rect = anchor.getBoundingClientRect(), width = (rect.right - rect.left) / 10
+  let rect = getUnscaledBoundingClientRect(anchor, scale), width = (rect.right - rect.left) / 10
   if (width > 2) display.cachedCharWidth = width
   return width || 10
 }
@@ -622,7 +623,7 @@ export function getDimensions(cm) {
     left[cm.options.gutters[i]] = n.offsetLeft + n.clientLeft + gutterLeft
     width[cm.options.gutters[i]] = n.clientWidth
   }
-  return {fixedPos: compensateForHScroll(d),
+  return {fixedPos: compensateForHScroll(d, cm.options.transformScale),
           gutterTotalWidth: d.gutters.offsetWidth,
           gutterLeft: left,
           gutterWidth: width,
@@ -632,8 +633,8 @@ export function getDimensions(cm) {
 // Computes display.scroller.scrollLeft + display.gutters.offsetWidth,
 // but using getBoundingClientRect to get a sub-pixel-accurate
 // result.
-export function compensateForHScroll(display) {
-  return display.scroller.getBoundingClientRect().left - display.sizer.getBoundingClientRect().left
+export function compensateForHScroll(display, scale) {
+  return getUnscaledBoundingClientRect(display.scroller, scale).left - getUnscaledBoundingClientRect(display.sizer, scale).left
 }
 
 // Returns a function that estimates the height of a line, to use as
@@ -641,7 +642,7 @@ export function compensateForHScroll(display) {
 // properly measurable).
 export function estimateHeight(cm) {
   let th = textHeight(cm.display), wrapping = cm.options.lineWrapping
-  let perLine = wrapping && Math.max(5, cm.display.scroller.clientWidth / charWidth(cm.display) - 3)
+  let perLine = wrapping && Math.max(5, cm.display.scroller.clientWidth / charWidth(cm.display, cm.options.transformScale) - 3)
   return line => {
     if (lineIsHidden(cm.doc, line)) return 0
 
@@ -674,14 +675,14 @@ export function posFromMouse(cm, e, liberal, forRect) {
   let display = cm.display
   if (!liberal && e_target(e).getAttribute("cm-not-content") == "true") return null
 
-  let x, y, space = display.lineSpace.getBoundingClientRect()
+  let x, y, space = getUnscaledBoundingClientRect(display.lineSpace, cm.options.transformScale)
   // Fails unpredictably on IE[67] when mouse is dragged around quickly.
-  try { x = e.clientX - space.left; y = e.clientY - space.top }
+  try { x = e.clientX / cm.options.transformScale - space.left; y = e.clientY / cm.options.transformScale - space.top }
   catch (e) { return null }
   let coords = coordsChar(cm, x, y), line
   if (forRect && coords.xRel == 1 && (line = getLine(cm.doc, coords.line).text).length == coords.ch) {
     let colDiff = countColumn(line, line.length, cm.options.tabSize) - line.length
-    coords = Pos(coords.line, Math.max(0, Math.round((x - paddingH(cm.display).left) / charWidth(cm.display)) - colDiff))
+    coords = Pos(coords.line, Math.max(0, Math.round((x - paddingH(cm.display).left) / charWidth(cm.display, cm.options.transformScale)) - colDiff))
   }
   return coords
 }
@@ -697,4 +698,23 @@ export function findViewIndex(cm, n) {
     n -= view[i].size
     if (n < 0) return i
   }
+}
+
+export function getUnscaledBoundingClientRect(element, scale) {
+  return unscale(element.getBoundingClientRect(), scale);
+}
+
+export function getUnscaledClientRects(element, scale) {
+  return element.getClientRects().map(function(rect) { unscale(rect, scale); });
+}
+
+function unscale(rect, scale) {
+  return {
+    left: rect.left / scale,
+    width: rect.width / scale,
+    right: rect.right / scale,
+    top: rect.top / scale,
+    bottom: rect.bottom / scale,
+    height: rect.height / scale
+  };
 }
